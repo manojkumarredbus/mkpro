@@ -6,7 +6,7 @@
 
     <groupId>com.mkpro</groupId>
     <artifactId>mkpro</artifactId>
-    <version>1.3-SNAPSHOT</version>
+    <version>1.4-SNAPSHOT</version>
     <packaging>jar</packaging>
 
     <properties>

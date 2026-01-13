@@ -30,6 +30,7 @@ import java.util.Collections;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Scanner;
+import java.util.concurrent.TimeUnit;
 
 public class MkPro {
 
@@ -40,6 +41,15 @@ public class MkPro {
         if (apiKey == null || apiKey.isEmpty()) {
             System.err.println("Error: GOOGLE_API_KEY environment variable not set.");
             System.exit(1);
+        }
+
+        // Check for UI flag
+        boolean useUI = false;
+        for (String arg : args) {
+            if ("-ui".equalsIgnoreCase(arg) || "--companion".equalsIgnoreCase(arg)) {
+                useUI = true;
+                break;
+            }
         }
 
         InMemorySessionService sessionService = new InMemorySessionService();
@@ -71,6 +81,7 @@ public class MkPro {
 
             @Override
             public Single<Map<String, Object>> runAsync(Map<String, Object> args, ToolContext toolContext) {
+                System.out.println("[DEBUG] Tool invoked: read_file");
                 String filePath = (String) args.get("file_path");
                 try {
                     Path path = Paths.get(filePath);
@@ -78,7 +89,6 @@ public class MkPro {
                          return Single.just(Collections.singletonMap("error", "File not found: " + filePath));
                     }
                     String content = Files.readString(path);
-                    // Truncate if too long
                     if (content.length() > 10000) {
                         content = content.substring(0, 10000) + "\n...[truncated]";
                     }
@@ -114,6 +124,7 @@ public class MkPro {
 
             @Override
             public Single<Map<String, Object>> runAsync(Map<String, Object> args, ToolContext toolContext) {
+                System.out.println("[DEBUG] Tool invoked: list_directory");
                 String dirPath = (String) args.get("dir_path");
                 try {
                      Path path = Paths.get(dirPath);
@@ -140,7 +151,7 @@ public class MkPro {
         // Define URL Fetch Tool
         BaseTool urlFetchTool = new BaseTool(
                 "fetch_url",
-                "Fetches the text content of a given URL for research purposes."
+                "Fetches and extracts text content from a given URL."
         ) {
             private final HttpClient client = HttpClient.newBuilder()
                     .followRedirects(HttpClient.Redirect.NORMAL)
@@ -157,7 +168,7 @@ public class MkPro {
                                 .properties(ImmutableMap.of(
                                         "url", Schema.builder()
                                                 .type("STRING")
-                                                .description("The URL to fetch content from.")
+                                                .description("The full URL to fetch content from.")
                                                 .build()
                                 ))
                                 .required(ImmutableList.of("url"))
@@ -167,9 +178,11 @@ public class MkPro {
 
             @Override
             public Single<Map<String, Object>> runAsync(Map<String, Object> args, ToolContext toolContext) {
+                System.out.println("[DEBUG] Tool invoked: fetch_url");
                 String url = (String) args.get("url");
                 return Single.fromCallable(() -> {
                     try {
+                        System.out.println("[DEBUG] Fetching URL: " + url);
                         HttpRequest request = HttpRequest.newBuilder()
                                 .uri(URI.create(url))
                                 .timeout(Duration.ofSeconds(20))
@@ -183,9 +196,9 @@ public class MkPro {
                         }
 
                         String html = response.body();
-                        // Very basic HTML stripping
-                        String text = html.replaceAll("<style.*?>.*?</style>", "")
-                                          .replaceAll("<script.*?>.*?</script>", "")
+                        // Basic stripping
+                        String text = html.replaceAll("(?s)<style.*?>.*?</style>", "")
+                                          .replaceAll("(?s)<script.*?>.*?</script>", "")
                                           .replaceAll("<[^>]+>", " ")
                                           .replaceAll("\\s+", " ")
                                           .trim();
@@ -202,16 +215,128 @@ public class MkPro {
             }
         };
 
+        // Define Write File Tool
+        BaseTool writeFileTool = new BaseTool(
+                "write_file",
+                "Writes content to a file, overwriting it."
+        ) {
+            @Override
+            public Optional<FunctionDeclaration> declaration() {
+                 return Optional.of(FunctionDeclaration.builder()
+                        .name(name())
+                        .description(description())
+                        .parameters(Schema.builder()
+                                .type("OBJECT")
+                                .properties(ImmutableMap.of(
+                                        "file_path", Schema.builder()
+                                                .type("STRING")
+                                                .description("The path to the file.")
+                                                .build(),
+                                        "content", Schema.builder()
+                                                .type("STRING")
+                                                .description("The content to write.")
+                                                .build()
+                                ))
+                                .required(ImmutableList.of("file_path", "content"))
+                                .build())
+                        .build());
+            }
+
+            @Override
+            public Single<Map<String, Object>> runAsync(Map<String, Object> args, ToolContext toolContext) {
+                System.out.println("[DEBUG] Tool invoked: write_file");
+                String filePath = (String) args.get("file_path");
+                String content = (String) args.get("content");
+                return Single.fromCallable(() -> {
+                    try {
+                        Path path = Paths.get(filePath);
+                        if (path.getParent() != null) {
+                            Files.createDirectories(path.getParent());
+                        }
+                        Files.writeString(path, content, java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.TRUNCATE_EXISTING);
+                        return Collections.singletonMap("status", "File written successfully: " + filePath);
+                    } catch (IOException e) {
+                        return Collections.singletonMap("error", "Error writing file: " + e.getMessage());
+                    }
+                });
+            }
+        };
+
+        // Define Run Shell Tool
+        BaseTool runShellTool = new BaseTool(
+                "run_shell",
+                "Executes a shell command."
+        ) {
+            @Override
+            public Optional<FunctionDeclaration> declaration() {
+                return Optional.of(FunctionDeclaration.builder()
+                        .name(name())
+                        .description(description())
+                        .parameters(Schema.builder()
+                                .type("OBJECT")
+                                .properties(ImmutableMap.of(
+                                        "command", Schema.builder()
+                                                .type("STRING")
+                                                .description("The command to execute.")
+                                                .build()
+                                ))
+                                .required(ImmutableList.of("command"))
+                                .build())
+                        .build());
+            }
+
+            @Override
+            public Single<Map<String, Object>> runAsync(Map<String, Object> args, ToolContext toolContext) {
+                System.out.println("[DEBUG] Tool invoked: run_shell");
+                String command = (String) args.get("command");
+                return Single.fromCallable(() -> {
+                    try {
+                        ProcessBuilder pb;
+                        String os = System.getProperty("os.name").toLowerCase();
+                        if (os.contains("win")) {
+                            pb = new ProcessBuilder("cmd.exe", "/c", command);
+                        } else {
+                            pb = new ProcessBuilder("sh", "-c", command);
+                        }
+                        pb.redirectErrorStream(true);
+                        Process process = pb.start();
+                        
+                        String output = new String(process.getInputStream().readAllBytes());
+                        boolean exited = process.waitFor(10, TimeUnit.SECONDS);
+                        if (!exited) {
+                             process.destroy();
+                             output += "\n[Timeout]";
+                        }
+                        int exitCode = exited ? process.exitValue() : -1;
+
+                        return ImmutableMap.of(
+                            "exit_code", exitCode,
+                            "output", output
+                        );
+                    } catch (Exception e) {
+                        return Collections.singletonMap("error", "Command failed: " + e.getMessage());
+                    }
+                });
+            }
+        };
+
         LlmAgent agent = LlmAgent.builder()
                 .name("mkpro")
                 .description("A helpful coding and research assistant.")
-                .instruction("You are mkpro, a coding assistant running in the terminal. "
-                        + "You can read files, list directories, and fetch URLs to help the user. "
-                        + "Use Google Search for general questions and fetch_url to read specific documentation pages."
+                .instruction("You are mkpro, a powerful coding assistant. "
+                        + "You have access to the local filesystem AND the internet. "
+                        + "TOOLS AVAILABLE:\n"
+                        + "- read_file: Read local files.\n"
+                        + "- write_file: Create or overwrite files.\n"
+                        + "- run_shell: Execute shell commands (git, etc).\n"
+                        + "- list_directory: List files in folders.\n"
+                        + "- fetch_url: Access external websites to read documentation. USE THIS when given a URL.\n"
+                        + "- google_search: Search Google for general information.\n\n"
+                        + "IMPORTANT: Before using write_file to modify code, you MUST use run_shell to 'git add .' and 'git commit' to save the current state.\n"
                         + "Always prefer concise answers.")
-                //.model("gemini-2.0-flash-exp") // Updated to 2.0-flash-exp for search capability
-                .model(new OllamaBaseLM("qwen3-vl:latest","http://localhost:11434"))
-                .tools(readFileTool, listDirTool, urlFetchTool )//GoogleSearchTool.INSTANCE
+                //.model("gemini-2.0-flash-exp")
+                .model(new OllamaBaseLM("devstral-small-2","http://localhost:11434"))
+                .tools(readFileTool, writeFileTool, runShellTool, listDirTool, urlFetchTool)//, GoogleSearchTool.INSTANCE
                 .build();
 
         Runner runner = Runner.builder()
@@ -224,6 +349,16 @@ public class MkPro {
 
         Session session = sessionService.createSession("mkpro-cli", "user").blockingGet();
 
+        if (useUI) {
+            System.out.println("Launching Swing Companion UI...");
+            SwingCompanion gui = new SwingCompanion(runner, session, sessionService);
+            gui.show();
+        } else {
+            runConsoleLoop(runner, session);
+        }
+    }
+
+    private static void runConsoleLoop(Runner runner, Session session) {
         System.out.println("mkpro ready! Type 'exit' to quit.");
         System.out.print("> ");
 
