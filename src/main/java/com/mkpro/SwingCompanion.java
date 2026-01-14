@@ -98,34 +98,9 @@ public class SwingCompanion {
 
         appendToHistory("User", text);
 
-        java.util.List<com.google.genai.types.Part> parts = new java.util.ArrayList<>();
-        parts.add(com.google.genai.types.Part.fromText(text));
-
-        // Detect image paths in the input
-        String[] tokens = text.split("\\s+");
-        for (String token : tokens) {
-            String lowerToken = token.toLowerCase();
-            if (lowerToken.endsWith(".jpg") || lowerToken.endsWith(".jpeg") || 
-                lowerToken.endsWith(".png") || lowerToken.endsWith(".webp")) {
-                try {
-                    java.nio.file.Path imagePath = java.nio.file.Paths.get(token);
-                    if (java.nio.file.Files.exists(imagePath)) {
-                        byte[] imageBytes = java.nio.file.Files.readAllBytes(imagePath);
-                        String mimeType = "image/jpeg";
-                        if (lowerToken.endsWith(".png")) mimeType = "image/png";
-                        else if (lowerToken.endsWith(".webp")) mimeType = "image/webp";
-                        
-                        parts.add(com.google.genai.types.Part.fromBytes(imageBytes, mimeType));
-                    }
-                } catch (Exception ex) {
-                    ex.printStackTrace();
-                }
-            }
-        }
-
         Content content = Content.builder()
                 .role("user")
-                .parts(parts)
+                .parts(Collections.singletonList(Part.builder().text(text).build()))
                 .build();
 
         // Run agent asynchronously
