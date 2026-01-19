@@ -44,10 +44,10 @@ import java.util.Arrays;
 public class MkPro {
 
     // ANSI Color Constants
-    public static final String ANSI_RESET = "\u001B[0m";
-    public static final String ANSI_BRIGHT_GREEN = "\u001B[92m";
-    public static final String ANSI_YELLOW = "\u001B[33m"; // Closest to Orange
-    public static final String ANSI_BLUE = "\u001B[34m";
+    public static final String ANSI_RESET = "\u001b[0m";
+    public static final String ANSI_BRIGHT_GREEN = "\u001b[92m";
+    public static final String ANSI_YELLOW = "\u001b[33m"; // Closest to Orange
+    public static final String ANSI_BLUE = "\u001b[34m";
 
     public static void main(String[] args) {
         // Check for flags
@@ -76,11 +76,6 @@ public class MkPro {
             System.out.println(ANSI_BLUE + "Initializing mkpro assistant with model: " + modelName + ANSI_RESET);
             Logger root = (Logger)LoggerFactory.getLogger(org.slf4j.Logger.ROOT_LOGGER_NAME);
             root.setLevel(Level.DEBUG);
-        } else {
-             // Ensure it stays at WARN (or whatever logback.xml said) unless we want to force it.
-             // But logback.xml handles the default.
-             // We can optionally force OFF if we want it *really* quiet.
-             // For now, let's respect logback.xml (WARN).
         }
 
         String apiKey = System.getenv("GOOGLE_API_KEY");
@@ -108,8 +103,11 @@ public class MkPro {
         InMemoryMemoryService memoryService = new InMemoryMemoryService();
         
         CentralMemory centralMemory = new CentralMemory();
+        Session mkSession = sessionService.createSession("mkpro-cli", "user").blockingGet();
+        ActionLogger logger = new ActionLogger("mkpro_logs.db");
 
-        // Define File Tool
+        // --- DEFINE TOOLS ---
+
         BaseTool readFileTool = new BaseTool(
                 "read_file",
                 "Reads the content of a file from the local filesystem."
@@ -135,7 +133,7 @@ public class MkPro {
             @Override
             public Single<Map<String, Object>> runAsync(Map<String, Object> args, ToolContext toolContext) {
                 String filePath = (String) args.get("file_path");
-                System.out.println(ANSI_BLUE + "[Tool] Reading file: " + filePath + ANSI_RESET);
+                System.out.println(ANSI_BLUE + "[Coder] Reading file: " + filePath + ANSI_RESET);
                 try {
                     Path path = Paths.get(filePath);
                     if (!Files.exists(path)) {
@@ -152,7 +150,6 @@ public class MkPro {
             }
         };
         
-        // Define List Directory Tool
         BaseTool listDirTool = new BaseTool(
                 "list_directory",
                 "Lists the files and directories in a given path."
@@ -178,7 +175,7 @@ public class MkPro {
             @Override
             public Single<Map<String, Object>> runAsync(Map<String, Object> args, ToolContext toolContext) {
                 String dirPath = (String) args.get("dir_path");
-                System.out.println(ANSI_BLUE + "[Tool] Listing directory: " + dirPath + ANSI_RESET);
+                System.out.println(ANSI_BLUE + "[Coder] Listing directory: " + dirPath + ANSI_RESET);
                 try {
                      Path path = Paths.get(dirPath);
                     if (!Files.exists(path) || !Files.isDirectory(path)) {
@@ -201,7 +198,6 @@ public class MkPro {
             }
         };
 
-        // Define URL Fetch Tool
         BaseTool urlFetchTool = new BaseTool(
                 "fetch_url",
                 "Fetches and extracts text content from a given URL."
@@ -232,10 +228,9 @@ public class MkPro {
             @Override
             public Single<Map<String, Object>> runAsync(Map<String, Object> args, ToolContext toolContext) {
                 String url = (String) args.get("url");
-                System.out.println(ANSI_BLUE + "[Tool] Fetching URL: " + url + ANSI_RESET);
+                System.out.println(ANSI_BLUE + "[Coordinator] Fetching URL: " + url + ANSI_RESET);
                 return Single.fromCallable(() -> {
                     try {
-                        if (isVerbose) System.out.println(ANSI_BLUE + "[DEBUG] HTTP Request: " + url + ANSI_RESET);
                         HttpRequest request = HttpRequest.newBuilder()
                                 .uri(URI.create(url))
                                 .timeout(Duration.ofSeconds(20))
@@ -268,7 +263,6 @@ public class MkPro {
             }
         };
 
-        // Define Read Image Tool
         BaseTool readImageTool = new BaseTool(
                 "read_image",
                 "Reads an image file and returns its Base64 encoded content. Use this to analyze images."
@@ -294,7 +288,7 @@ public class MkPro {
             @Override
             public Single<Map<String, Object>> runAsync(Map<String, Object> args, ToolContext toolContext) {
                 String filePath = (String) args.get("file_path");
-                System.out.println(ANSI_BLUE + "[Tool] Analyzing image: " + filePath + ANSI_RESET);
+                System.out.println(ANSI_BLUE + "[Coder] Analyzing image: " + filePath + ANSI_RESET);
                 return Single.fromCallable(() -> {
                     try {
                         Path path = Paths.get(filePath);
@@ -318,7 +312,6 @@ public class MkPro {
             }
         };
 
-        // Define Write File Tool
         BaseTool writeFileTool = new BaseTool(
                 "write_file",
                 "Writes content to a file, overwriting it."
@@ -348,7 +341,7 @@ public class MkPro {
             @Override
             public Single<Map<String, Object>> runAsync(Map<String, Object> args, ToolContext toolContext) {
                 String filePath = (String) args.get("file_path");
-                System.out.println(ANSI_BLUE + "[Tool] Writing file: " + filePath + ANSI_RESET);
+                System.out.println(ANSI_BLUE + "[Coder] Writing file: " + filePath + ANSI_RESET);
                 String content = (String) args.get("content");
                 return Single.fromCallable(() -> {
                     try {
@@ -365,7 +358,6 @@ public class MkPro {
             }
         };
 
-        // Define Run Shell Tool
         BaseTool runShellTool = new BaseTool(
                 "run_shell",
                 "Executes a shell command."
@@ -391,7 +383,7 @@ public class MkPro {
             @Override
             public Single<Map<String, Object>> runAsync(Map<String, Object> args, ToolContext toolContext) {
                 String command = (String) args.get("command");
-                System.out.println(ANSI_BLUE + "[Tool] Executing: " + command + ANSI_RESET);
+                System.out.println(ANSI_BLUE + "[SysAdmin] Executing: " + command + ANSI_RESET);
                 return Single.fromCallable(() -> {
                     try {
                         ProcessBuilder pb;
@@ -423,11 +415,6 @@ public class MkPro {
             }
         };
 
-        Session session = sessionService.createSession("mkpro-cli", "user").blockingGet();
-
-        ActionLogger logger = new ActionLogger("mkpro_logs.db");
-
-        // Define Get Action Logs Tool
         BaseTool getActionLogsTool = new BaseTool(
                 "get_action_logs",
                 "Retrieves the history of user actions and agent responses."
@@ -446,7 +433,6 @@ public class MkPro {
 
             @Override
             public Single<Map<String, Object>> runAsync(Map<String, Object> args, ToolContext toolContext) {
-                if (isVerbose) System.out.println(ANSI_BLUE + "[DEBUG] Tool invoked: get_action_logs" + ANSI_RESET);
                 return Single.fromCallable(() -> {
                     try {
                         StringBuilder logsBuilder = new StringBuilder();
@@ -461,10 +447,9 @@ public class MkPro {
             }
         };
 
-        // Define Save Central Memory Tool
         BaseTool saveMemoryTool = new BaseTool(
                 "save_central_memory",
-                "Saves a summary or memory of the current project to the user's central database. Use this to persist long-term knowledge."
+                "Saves a summary or memory of the current project to the user's central database."
         ) {
             @Override
             public Optional<FunctionDeclaration> declaration() {
@@ -488,7 +473,7 @@ public class MkPro {
             public Single<Map<String, Object>> runAsync(Map<String, Object> args, ToolContext toolContext) {
                 String content = (String) args.get("content");
                 String currentPath = Paths.get("").toAbsolutePath().toString();
-                System.out.println(ANSI_BLUE + "[Tool] Saving to central memory for: " + currentPath + ANSI_RESET);
+                System.out.println(ANSI_BLUE + "[Coordinator] Saving to central memory for: " + currentPath + ANSI_RESET);
                 return Single.fromCallable(() -> {
                     try {
                         centralMemory.saveMemory(currentPath, content);
@@ -500,7 +485,6 @@ public class MkPro {
             }
         };
 
-        // Define Read Central Memory Tool
         BaseTool readMemoryTool = new BaseTool(
                 "read_central_memory",
                 "Reads the stored memory for the current project from the central database."
@@ -520,7 +504,7 @@ public class MkPro {
             @Override
             public Single<Map<String, Object>> runAsync(Map<String, Object> args, ToolContext toolContext) {
                 String currentPath = Paths.get("").toAbsolutePath().toString();
-                System.out.println(ANSI_BLUE + "[Tool] Reading central memory for: " + currentPath + ANSI_RESET);
+                System.out.println(ANSI_BLUE + "[Coordinator] Reading central memory for: " + currentPath + ANSI_RESET);
                 return Single.fromCallable(() -> {
                     try {
                         String memory = centralMemory.getMemory(currentPath);
@@ -535,46 +519,161 @@ public class MkPro {
             }
         };
 
-        // Collection of tools
-        List<BaseTool> tools = new ArrayList<>();
-        tools.add(readFileTool);
-        tools.add(readImageTool);
-        tools.add(writeFileTool);
-        tools.add(runShellTool);
-        tools.add(listDirTool);
-        tools.add(urlFetchTool);
-        tools.add(getActionLogsTool);
-        tools.add(saveMemoryTool);
-        tools.add(readMemoryTool);
+        // --- SUB-AGENT RUNNER HELPER ---
+        
+        Function<AgentRequest, String> subAgentRunner = (request) -> {
+            try {
+                // Reuse sessionService but create new session for sub-task to keep context clean
+                Session subSession = sessionService.createSession(request.agentName, "user").blockingGet();
+                
+                LlmAgent subAgent = LlmAgent.builder()
+                    .name(request.agentName)
+                    .instruction(request.instruction)
+                    .model(new OllamaBaseLM(request.modelName, "http://localhost:11434"))
+                    .tools(request.tools)
+                    .planning(true) // Enable planning for sub-agents too
+                    .build();
+
+                Runner subRunner = Runner.builder()
+                    .agent(subAgent)
+                    .appName(request.agentName) // Match Session app name
+                    .sessionService(sessionService)
+                    .artifactService(artifactService)
+                    .memoryService(memoryService)
+                    .build();
+
+                StringBuilder output = new StringBuilder();
+                Content content = Content.builder().role("user").parts(List.of(Part.fromText(request.userPrompt))).build();
+                
+                subRunner.runAsync("user", subSession.id(), content)
+                      .filter(e -> e.content().isPresent())
+                      .blockingForEach(e -> 
+                          e.content().flatMap(Content::parts).orElse(Collections.emptyList())
+                           .forEach(p -> p.text().ifPresent(output::append))
+                      );
+                return output.toString();
+            } catch (Exception e) {
+                return "Error executing sub-agent " + request.agentName + ": " + e.getMessage();
+            }
+        };
+
+        // --- DELEGATION TOOLS ---
+
+        // We will move tool creation into the factory to capture 'currentModelName'
 
         // Factory to create Runner with specific model
         Function<String, Runner> runnerFactory = (currentModelName) -> {
-            LlmAgent agent = LlmAgent.builder()
-                .name("mkpro")
-                .description("A helpful coding and research assistant.")
-                .instruction("You are mkpro, a powerful coding assistant. "
-                        + "You have access to the local filesystem AND the internet. "
-                        + "You can also ANALYZE IMAGES using the 'read_image' tool. "
-                        + "TOOLS AVAILABLE:\n"
-                        + "- read_file: Read local files (text).\n"
-                        + "- read_image: Read image files (returns base64).\n"
-                        + "- write_file: Create or overwrite files.\n"
-                        + "- run_shell: Execute shell commands (git, etc).\n"
-                        + "- list_directory: List files in folders.\n"
-                        + "- fetch_url: Access external websites to read documentation. USE THIS when given a URL.\n"
-                        + "- google_search: Search Google for general information.\n"
-                        + "- get_action_logs: Retrieve history of interactions.\n\n"
-                        + "IMPORTANT: Before using write_file to modify code, you MUST use run_shell to 'git add .' and 'git commit' to save the current state.\n"
+            
+            // --- Re-define Delegation Tools to capture currentModelName ---
+            
+            BaseTool scopedAskCoderTool = new BaseTool(
+                "ask_coder",
+                "Delegates coding tasks to the Coder agent (read/write files, list dirs)."
+            ) {
+                @Override
+                public Optional<FunctionDeclaration> declaration() {
+                    return Optional.of(FunctionDeclaration.builder()
+                            .name(name())
+                            .description(description())
+                            .parameters(Schema.builder()
+                                    .type("OBJECT")
+                                    .properties(ImmutableMap.of(
+                                            "instruction", Schema.builder().type("STRING").description("Instructions for Coder.").build()
+                                    ))
+                                    .required(ImmutableList.of("instruction"))
+                                    .build())
+                            .build());
+                }
+
+                @Override
+                public Single<Map<String, Object>> runAsync(Map<String, Object> args, ToolContext toolContext) {
+                    String instruction = (String) args.get("instruction");
+                    System.out.println(ANSI_BLUE + ">> Delegating to Coder..." + ANSI_RESET);
+                    return Single.fromCallable(() -> {
+                        String result = subAgentRunner.apply(new AgentRequest(
+                            "Coder", 
+                            "You are the Coder. You specialize in software engineering. " +
+                            "You can read files, write files, list directories, and analyze images. " +
+                            "You CANNOT execute shell commands directly. " +
+                            "Perform the requested task and provide a concise report.",
+                            currentModelName,
+                            instruction,
+                            List.of(readFileTool, writeFileTool, listDirTool, readImageTool)
+                        ));
+                        return Collections.singletonMap("result", result);
+                    });
+                }
+            };
+
+            BaseTool scopedAskSysAdminTool = new BaseTool(
+                "ask_sysadmin",
+                "Delegates system command execution to the SysAdmin agent (shell commands)."
+            ) {
+                @Override
+                public Optional<FunctionDeclaration> declaration() {
+                    return Optional.of(FunctionDeclaration.builder()
+                            .name(name())
+                            .description(description())
+                            .parameters(Schema.builder()
+                                    .type("OBJECT")
+                                    .properties(ImmutableMap.of(
+                                            "instruction", Schema.builder().type("STRING").description("Instructions for SysAdmin.").build()
+                                    ))
+                                    .required(ImmutableList.of("instruction"))
+                                    .build())
+                            .build());
+                }
+
+                @Override
+                public Single<Map<String, Object>> runAsync(Map<String, Object> args, ToolContext toolContext) {
+                    String instruction = (String) args.get("instruction");
+                    System.out.println(ANSI_BLUE + ">> Delegating to SysAdmin..." + ANSI_RESET);
+                    return Single.fromCallable(() -> {
+                        String result = subAgentRunner.apply(new AgentRequest(
+                            "SysAdmin", 
+                            "You are the System Administrator. " +
+                            "You specialize in executing shell commands safely. " +
+                            "You can use 'run_shell'. Execute the requested commands and report the output.",
+                            currentModelName,
+                            instruction,
+                            List.of(runShellTool)
+                        ));
+                        return Collections.singletonMap("result", result);
+                    });
+                }
+            };
+
+            // Coordinator Tools
+            List<BaseTool> coordinatorTools = new ArrayList<>();
+            coordinatorTools.add(scopedAskCoderTool);
+            coordinatorTools.add(scopedAskSysAdminTool);
+            coordinatorTools.add(urlFetchTool);
+            coordinatorTools.add(getActionLogsTool);
+            coordinatorTools.add(saveMemoryTool);
+            coordinatorTools.add(readMemoryTool);
+            // Coordinator can also list directories to "see" where it is, though Coder has it too.
+            // Giving basic visibility to Coordinator is usually good.
+            coordinatorTools.add(listDirTool); 
+
+            LlmAgent coordinatorAgent = LlmAgent.builder()
+                .name("Coordinator")
+                .description("The main orchestrator agent.")
+                .instruction("You are the Coordinator. You interface with the user and manage the workflow. "
+                        + "You have two specialized sub-agents: \n" 
+                        + "1. **Coder**: Handles all file operations (read, write, analyze images). \n" 
+                        + "2. **SysAdmin**: Handles all shell command executions. \n" 
+                        + "Delegate tasks appropriately. Do not try to write files or run commands yourself; you don't have those tools. " 
+                        + "You DO have tools to fetch URLs and manage long-term memory. " 
                         + "Always prefer concise answers."
                         + finalSummaryContext)
                 .model(new OllamaBaseLM(currentModelName, "http://localhost:11434"))
-                .tools(tools)
+                .tools(coordinatorTools)
                 .planning(true)
                 .build();
 
             return Runner.builder()
-                .agent(agent)
-                .appName("mkpro-cli")
+                .agent(coordinatorAgent)
+                .appName("mkpro-cli") // MATCHING APP NAME
                 .sessionService(sessionService)
                 .artifactService(artifactService)
                 .memoryService(memoryService)
@@ -585,13 +684,31 @@ public class MkPro {
             if (isVerbose) System.out.println(ANSI_BLUE + "Launching Swing Companion UI..." + ANSI_RESET);
             // UI uses initial model
             Runner runner = runnerFactory.apply(modelName);
-            SwingCompanion gui = new SwingCompanion(runner, session, sessionService);
+            SwingCompanion gui = new SwingCompanion(runner, mkSession, sessionService);
             gui.show();
         } else {
-            runConsoleLoop(runnerFactory, modelName, session, sessionService, centralMemory, logger, isVerbose);
+            runConsoleLoop(runnerFactory, modelName, mkSession, sessionService, centralMemory, logger, isVerbose);
         }
         
         logger.close();
+        // centralMemory.close(); // removed as it is not Closeable
+    }
+
+    // Helper class to pass data to subAgentRunner
+    private static class AgentRequest {
+        String agentName;
+        String instruction;
+        String modelName;
+        String userPrompt;
+        List<BaseTool> tools;
+
+        public AgentRequest(String agentName, String instruction, String modelName, String userPrompt, List<BaseTool> tools) {
+            this.agentName = agentName;
+            this.instruction = instruction;
+            this.modelName = modelName;
+            this.userPrompt = userPrompt;
+            this.tools = tools;
+        }
     }
 
     private static void runConsoleLoop(Function<String, Runner> runnerFactory, String initialModelName, Session initialSession, InMemorySessionService sessionService, CentralMemory centralMemory, ActionLogger logger, boolean verbose) {
@@ -666,8 +783,6 @@ public class MkPro {
                     if (response.statusCode() == 200) {
                         System.out.println(ANSI_BLUE + "Ollama Models:" + ANSI_RESET);
                         String body = response.body();
-                        // Simple manual parsing since we don't want to add big dependencies for one list
-                        // The format is like {"models":[{"name":"llama3:latest",...}]}
                         java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("\"name\":\"([^\"]+)\"");
                         java.util.regex.Matcher matcher = pattern.matcher(body);
                         boolean found = false;
