@@ -148,11 +148,33 @@ public class MkPro {
         // Initialize default configs for all agents
         Map<String, AgentConfig> agentConfigs = new java.util.HashMap<>();
         
+        // Defaults
         agentConfigs.put("Coordinator", new AgentConfig(initialProvider, initialModelName));
         agentConfigs.put("Coder", new AgentConfig(initialProvider, initialModelName));
         agentConfigs.put("SysAdmin", new AgentConfig(initialProvider, initialModelName));
         agentConfigs.put("Tester", new AgentConfig(initialProvider, initialModelName));
         agentConfigs.put("DocWriter", new AgentConfig(initialProvider, initialModelName));
+
+        // Load overrides from Central Memory
+        try {
+            Map<String, String> storedConfigs = centralMemory.getAgentConfigs();
+            for (Map.Entry<String, String> entry : storedConfigs.entrySet()) {
+                String agent = entry.getKey();
+                String val = entry.getValue();
+                if (val != null && val.contains("|")) {
+                    String[] parts = val.split("\\|", 2);
+                    try {
+                        Provider p = Provider.valueOf(parts[0]);
+                        String m = parts[1];
+                        agentConfigs.put(agent, new AgentConfig(p, m));
+                    } catch (IllegalArgumentException e) {
+                        System.err.println(ANSI_BLUE + "Warning: Invalid provider in saved config for " + agent + ": " + parts[0] + ANSI_RESET);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            System.err.println(ANSI_BLUE + "Warning: Failed to load agent configs from central memory: " + e.getMessage() + ANSI_RESET);
+        }
 
         Runner runner = runnerFactory.apply(agentConfigs);
         Session currentSession = initialSession;
@@ -343,6 +365,7 @@ public class MkPro {
 
                     // Apply Configuration
                     agentConfigs.put(selectedAgent, new AgentConfig(selectedProvider, selectedModel));
+                    centralMemory.saveAgentConfig(selectedAgent, selectedProvider.name(), selectedModel);
                     System.out.println(ANSI_BLUE + "Updated " + selectedAgent + " to [" + selectedProvider + "] " + selectedModel + ANSI_RESET);
                     
                     if ("Coordinator".equalsIgnoreCase(selectedAgent)) {
@@ -369,6 +392,7 @@ public class MkPro {
                             }
 
                             agentConfigs.put(agentName, new AgentConfig(newProvider, newModel));
+                            centralMemory.saveAgentConfig(agentName, newProvider.name(), newModel);
                             System.out.println(ANSI_BLUE + "Updated " + agentName + " to [" + newProvider + "] " + newModel + ANSI_RESET);
                             
                             if ("Coordinator".equalsIgnoreCase(agentName)) {
@@ -416,6 +440,7 @@ public class MkPro {
                 
                 if (newProvider != null) {
                     agentConfigs.put("Coordinator", new AgentConfig(newProvider, newModel));
+                    centralMemory.saveAgentConfig("Coordinator", newProvider.name(), newModel);
                     runner = runnerFactory.apply(agentConfigs);
                 }
                 System.out.print(ANSI_BLUE + "> " + ANSI_YELLOW);
@@ -559,6 +584,7 @@ public class MkPro {
                                 if (!newModel.equals(coordConfig.getModelName())) {
                                     System.out.println(ANSI_BLUE + "Switching Coordinator model to: " + newModel + "..." + ANSI_RESET);
                                     agentConfigs.put("Coordinator", new AgentConfig(coordConfig.getProvider(), newModel));
+                                    centralMemory.saveAgentConfig("Coordinator", coordConfig.getProvider().name(), newModel);
                                     runner = runnerFactory.apply(agentConfigs);
                                     System.out.println(ANSI_BLUE + "Model switched successfully." + ANSI_RESET);
                                 } else {

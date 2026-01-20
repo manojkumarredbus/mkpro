@@ -71,4 +71,28 @@ public class CentralMemory {
             return copy;
         }
     }
+
+    public void saveAgentConfig(String agentName, String provider, String modelName) {
+        try (DB db = openDB()) {
+            HTreeMap<String, String> configs = db.hashMap("agent_configs")
+                    .keySerializer(Serializer.STRING)
+                    .valueSerializer(Serializer.STRING)
+                    .createOrOpen();
+            // Format: PROVIDER|MODEL
+            configs.put(agentName, provider + "|" + modelName);
+            db.commit();
+        }
+    }
+
+    public Map<String, String> getAgentConfigs() {
+        try (DB db = openDB()) {
+            HTreeMap<String, String> configs = db.hashMap("agent_configs")
+                    .keySerializer(Serializer.STRING)
+                    .valueSerializer(Serializer.STRING)
+                    .createOrOpen();
+            Map<String, String> copy = new HashMap<>();
+            configs.forEach((k, v) -> copy.put((String)k, (String)v));
+            return copy;
+        }
+    }
 }
