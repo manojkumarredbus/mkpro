@@ -33,6 +33,7 @@ Your `mkpro` instance is not just a chatbot; it's a team of experts led by a Coo
 ## 🛠️ Setup & Installation
 
 ### Prerequisites
+- **Google Agent Development Kit (ADK)**: This project requires the **redbus version** of ADK. You must clone and install it locally from [redbus-labs/adk-java](https://github.com/redbus-labs/adk-java) before building `mkpro`.
 - **Java 17+** and **Maven** (for building).
 - **Ollama** (Optional): For local privacy-first inference.
 - **Google API Key** (Optional): Set `GOOGLE_API_KEY` for Gemini.
