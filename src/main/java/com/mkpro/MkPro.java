@@ -504,7 +504,7 @@ public class MkPro {
                 // Spinner chars
                 String[] syms = {"|", "/", "-", "\\"};
                 int spinnerIdx = 0;
-                long lastSpinnerUpdate = System.currentTimeMillis();
+                long lastSpinnerUpdate = 0;
 
                 while (isThinking.get()) {
                     // Non-blocking read with timeout
@@ -525,6 +525,7 @@ public class MkPro {
                         long now = System.currentTimeMillis();
                         if (now - lastSpinnerUpdate > 100) {
                             System.out.print("\r" + ANSI_BLUE + "Thinking " + syms[spinnerIdx++ % syms.length] + ANSI_RESET);
+                            System.out.flush();
                             lastSpinnerUpdate = now;
                         }
                     } else {
