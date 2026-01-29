@@ -12,6 +12,7 @@ import com.mkpro.models.AgentConfig;
 import com.mkpro.models.AgentStat;
 import com.mkpro.models.Provider;
 import com.mkpro.models.RunnerType;
+import com.mkpro.models.ModelConfiguration;
 import com.mkpro.agents.AgentManager;
 
 import java.io.IOException;
@@ -56,36 +57,13 @@ public class MkPro {
     public static final String ANSI_YELLOW = "\u001b[33m"; // Closest to Orange
     public static final String ANSI_BLUE = "\u001b[34m";
 
-    private static final List<String> GEMINI_MODELS = Arrays.asList(
-         "gemini-3-pro-preview",
-    "gemini-3-flash-preview",
-    "gemini-2.5-pro",
-    "gemini-2.5-flash",
-    "gemini-2.5-flash-lite",
-    "gemini-2.5-flash-thinking",
-    "gemini-2.0-pro",
-    "gemini-2.0-flash",
-    "gemini-2.0-flash-lite",
-    "gemini-2.0-flash-thinking-exp",
-    "gemini-1.5-pro",
-    "gemini-1.5-flash",
-    "gemini-1.5-flash-8b"
-    );
-
-    private static final List<String> BEDROCK_MODELS = Arrays.asList(
-        "anthropic.claude-3-sonnet-20240229-v1:0",
-        "anthropic.claude-3-haiku-20240307-v1:0",
-        "anthropic.claude-3-5-sonnet-20240620-v1:0",
-        "meta.llama3-70b-instruct-v1:0",
-        "meta.llama3-8b-instruct-v1:0",
-        "amazon.titan-text-express-v1"
-    );
 
     public static void main(String[] args) {
         // Check for flags
         boolean useUI = false;
         boolean verbose = false;
-        String initialModelName = "devstral-small-2";
+        String initialModelName = ModelConfiguration.DEFAULT_OLLAMA_MODEL;
+        Provider initialProvider = Provider.OLLAMA;
         RunnerType initialRunnerType = null;
 
         for (int i = 0; i < args.length; i++) {
@@ -99,6 +77,19 @@ public class MkPro {
             } else if ("-m".equalsIgnoreCase(arg) || "--model".equalsIgnoreCase(arg)) {
                 if (i + 1 < args.length) {
                     initialModelName = args[i + 1];
+                    i++;
+                }
+            } else if ("-p".equalsIgnoreCase(arg) || "--provider".equalsIgnoreCase(arg)) {
+                if (i + 1 < args.length) {
+                    try {
+                        initialProvider = Provider.valueOf(args[i + 1].toUpperCase());
+                        // Update model to default for the selected provider if not explicitly set
+                        if (initialModelName.equals(ModelConfiguration.DEFAULT_OLLAMA_MODEL)) {
+                            initialModelName = ModelConfiguration.getDefaultModel(initialProvider);
+                        }
+                    } catch (IllegalArgumentException e) {
+                        System.err.println("Invalid provider: " + args[i+1] + ". Valid options: OLLAMA, GEMINI, BEDROCK.");
+                    }
                     i++;
                 }
             } else if ("-r".equalsIgnoreCase(arg) || "--runner".equalsIgnoreCase(arg)) {
@@ -139,6 +130,7 @@ public class MkPro {
         }
         
         final String modelName = initialModelName;
+        final Provider defaultProvider = initialProvider;
         final boolean isVerbose = verbose;
 
         if (isVerbose) {
@@ -186,25 +178,24 @@ public class MkPro {
         if (useUI) {
             if (isVerbose) System.out.println(ANSI_BLUE + "Launching Swing Companion UI..." + ANSI_RESET);
             Map<String, AgentConfig> uiConfigs = new java.util.HashMap<>();
-            uiConfigs.put("Coordinator", new AgentConfig(Provider.OLLAMA, modelName));
-            uiConfigs.put("Coder", new AgentConfig(Provider.OLLAMA, modelName));
-            uiConfigs.put("SysAdmin", new AgentConfig(Provider.OLLAMA, modelName));
-            uiConfigs.put("Tester", new AgentConfig(Provider.OLLAMA, modelName));
-            uiConfigs.put("DocWriter", new AgentConfig(Provider.OLLAMA, modelName));
-            uiConfigs.put("SecurityAuditor", new AgentConfig(Provider.OLLAMA, modelName));
-            uiConfigs.put("Architect", new AgentConfig(Provider.OLLAMA, modelName));
-            uiConfigs.put("DatabaseAdmin", new AgentConfig(Provider.OLLAMA, modelName));
-            uiConfigs.put("DevOps", new AgentConfig(Provider.OLLAMA, modelName));
-            uiConfigs.put("DataAnalyst", new AgentConfig(Provider.OLLAMA, modelName));
-            uiConfigs.put("GoalTracker", new AgentConfig(Provider.OLLAMA, modelName));
-            uiConfigs.put("CodeEditor", new AgentConfig(Provider.OLLAMA, modelName));
+            uiConfigs.put("Coordinator", new AgentConfig(defaultProvider, modelName));
+            uiConfigs.put("Coder", new AgentConfig(defaultProvider, modelName));
+            uiConfigs.put("SysAdmin", new AgentConfig(defaultProvider, modelName));
+            uiConfigs.put("Tester", new AgentConfig(defaultProvider, modelName));
+            uiConfigs.put("DocWriter", new AgentConfig(defaultProvider, modelName));
+            uiConfigs.put("SecurityAuditor", new AgentConfig(defaultProvider, modelName));
+            uiConfigs.put("Architect", new AgentConfig(defaultProvider, modelName));
+            uiConfigs.put("DatabaseAdmin", new AgentConfig(defaultProvider, modelName));
+            uiConfigs.put("DevOps", new AgentConfig(defaultProvider, modelName));
+            uiConfigs.put("DataAnalyst", new AgentConfig(defaultProvider, modelName));
+            uiConfigs.put("GoalTracker", new AgentConfig(defaultProvider, modelName));
+            uiConfigs.put("CodeEditor", new AgentConfig(defaultProvider, modelName));
             
             Runner runner = runnerBuilder.apply(uiConfigs, currentRunnerType.get());
             SwingCompanion gui = new SwingCompanion(runner, mkSession);
             gui.show();
         } else {
-            // Default provider OLLAMA
-            runConsoleLoop(runnerBuilder, currentRunnerType, modelName, Provider.OLLAMA, mkSession, sessionService, centralMemory, logger, isVerbose);
+            runConsoleLoop(runnerBuilder, currentRunnerType, modelName, defaultProvider, mkSession, sessionService, centralMemory, logger, isVerbose);
         }
         
         logger.close();
@@ -485,10 +476,9 @@ public class MkPro {
 
                     // 3. Select Model
                     List<String> availableModels = new ArrayList<>();
-                    if (selectedProvider == Provider.GEMINI) {
-                        availableModels.addAll(GEMINI_MODELS);
-                    } else if (selectedProvider == Provider.BEDROCK) {
-                        availableModels.addAll(BEDROCK_MODELS);
+                    List<String> providerModels = ModelConfiguration.getAvailableModels(selectedProvider);
+                    if (!providerModels.isEmpty()) {
+                        availableModels.addAll(providerModels);
                     } else if (selectedProvider == Provider.OLLAMA) {
                         fTerminal.writer().println(ANSI_BLUE + "Fetching available Ollama models..." + ANSI_RESET);
                         try {
@@ -561,10 +551,9 @@ public class MkPro {
                             Provider newProvider = Provider.valueOf(providerStr);
                             String newModel = (parts.length > 3) ? parts[3] : agentConfigs.get(agentName).getModelName(); 
                             
+                            // If provider changed and no model specified, use default for new provider
                             if (parts.length == 3 && newProvider != agentConfigs.get(agentName).getProvider()) {
-                                if (newProvider == Provider.GEMINI) newModel = "gemini-1.5-flash";
-                                else if (newProvider == Provider.BEDROCK) newModel = "anthropic.claude-3-sonnet-20240229-v1:0";
-                                else if (newProvider == Provider.OLLAMA) newModel = "devstral-small-2";
+                                newModel = ModelConfiguration.getDefaultModel(newProvider);
                             }
 
                             agentConfigs.put(agentName, new AgentConfig(newProvider, newModel));
