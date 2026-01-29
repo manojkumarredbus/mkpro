@@ -45,6 +45,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import com.mkpro.models.AgentDefinition;
 import com.mkpro.models.AgentsConfig;
+import java.nio.file.Path;
+import java.nio.file.Files;
 import java.io.InputStream;
 import java.util.HashMap;
 
@@ -91,7 +93,8 @@ public class AgentManager {
                         String apiKey,
                         ActionLogger logger,
                         CentralMemory centralMemory,
-                        RunnerType runnerType) {
+                        RunnerType runnerType,
+                        Path teamFilePath) {
         this.sessionService = sessionService;
         this.artifactService = artifactService;
         this.memoryService = memoryService;
@@ -99,11 +102,11 @@ public class AgentManager {
         this.logger = logger;
         this.centralMemory = centralMemory;
         this.runnerType = runnerType;
-        this.agentDefinitions = loadAgentDefinitions();
+        this.agentDefinitions = loadAgentDefinitions(teamFilePath);
     }
 
-    private Map<String, AgentDefinition> loadAgentDefinitions() {
-        try (InputStream is = getClass().getResourceAsStream("/agents.yaml")) {
+    private Map<String, AgentDefinition> loadAgentDefinitions(Path teamFilePath) {
+        try (InputStream is = Files.newInputStream(teamFilePath)) {
             ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
             AgentsConfig config = mapper.readValue(is, AgentsConfig.class);
             Map<String, AgentDefinition> map = new HashMap<>();
@@ -112,7 +115,7 @@ public class AgentManager {
             }
             return map;
         } catch (Exception e) {
-            throw new RuntimeException("Failed to load agents.yaml", e);
+            throw new RuntimeException("Failed to load agents from " + teamFilePath, e);
         }
     }
 
