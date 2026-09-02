@@ -28,7 +28,7 @@
         <!-- ADK: locally installed from source. No remote SNAPSHOT repo configured,
              so this version is effectively pinned to the local build.
              To update: rebuild ADK from source and mvn install. -->
-        <adk.version>1.6.1-SNAPSHOT</adk.version>
+        <adk.version>1.7.2-SNAPSHOT</adk.version>
         <rxjava.version>3.1.8</rxjava.version>
         <jsch.version>0.2.16</jsch.version>
     </properties>

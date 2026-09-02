@@ -9,6 +9,13 @@ while [ -L "$SOURCE" ]; do
 done
 SCRIPT_DIR="$( cd -P "$( dirname "$SOURCE" )" &> /dev/null && pwd )"
 
+# Source env vars from .env if present (e.g. GOOGLE_API_KEY, AWS_BEARER_TOKEN_BEDROCK, BEDROCK_URL)
+if [ -f "$SCRIPT_DIR/.env" ]; then
+    set -a
+    source "$SCRIPT_DIR/.env"
+    set +a
+fi
+
 # Define the path to the shaded JAR
 
 export JDK_JAVA_OPTIONS="--add-modules jdk.incubator.vector --enable-preview"

@@ -44,8 +44,22 @@ public class ActionLogger {
             .connectTimeout(Duration.ofSeconds(2))
             .build();
 
+    /** File-based logger (persistent). Use when MAP_DB or POSTGRES runner is selected. */
     public ActionLogger(String dbPath) {
         init(dbPath);
+    }
+
+    /** In-memory logger (ephemeral). Use when IN_MEMORY runner is selected to avoid file locks. */
+    public static ActionLogger inMemory() {
+        ActionLogger logger = new ActionLogger();
+        logger.db = DBMaker.memoryDB().make();
+        logger.logs = logger.db.indexTreeList("logs", Serializer.STRING).createOrOpen();
+        return logger;
+    }
+
+    private ActionLogger() {
+        this.db = null;
+        this.logs = null;
     }
 
     public void log(String role, String content) {

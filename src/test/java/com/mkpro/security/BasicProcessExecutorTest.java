@@ -31,8 +31,10 @@ class BasicProcessExecutorTest {
     @Test
     void testTimeout() {
         // Command that runs for 10+ seconds, but executor has 5s timeout
-        String sleepCmd = System.getProperty("os.name").toLowerCase().contains("win") 
-            ? "ping -n 11 127.0.0.1" : "sleep 10";
+        // Use an allowlisted command so this exercises the executor timeout rather
+        // than being rejected by CommandPolicy before a process is started.
+        String sleepCmd = System.getProperty("os.name").toLowerCase().contains("win")
+            ? "ping -n 11 127.0.0.1" : "ping 127.0.0.1";
         
         ExecutionResult result = executor.execute(sleepCmd);
         assertTrue(result.isTimedOut(), "Expected timeout but got: exitCode=" + result.getExitCode());
